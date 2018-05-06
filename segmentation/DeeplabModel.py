@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image
 
 import tensorflow as tf
+import cv2
 
 # FROM https://github.com/tensorflow/models/tree/master/research/deeplab
 
@@ -44,11 +45,12 @@ class DeepLabModel(object):
 
     self.sess = tf.Session(graph=self.graph)
 
-  def run(self, image):
+  def run(self, image, upscale=False):
     """Runs inference on a single image.
 
     Args:
       image: A PIL.Image object, raw input image.
+      upscale: Whether to upscale the color map to the original size
 
     Returns:
       resized_image: RGB image resized from original input image.
@@ -62,6 +64,9 @@ class DeepLabModel(object):
       self.OUTPUT_TENSOR_NAME,
       feed_dict={self.INPUT_TENSOR_NAME: [np.asarray(resized_image)]})
     seg_map = batch_seg_map[0]
+
+    if upscale:
+        seg_map = cv2.resize(seg_map.astype(np.uint8), (width, height), interpolation=cv2.INTER_NEAREST)
     return resized_image, seg_map
 
 
