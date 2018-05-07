@@ -1,4 +1,5 @@
 __pycache__
+*.pyc
 .idea/*
 *.iml
 logs/*
@@ -6,3 +7,4 @@ checkpoint/*
 datasets/*
 test/*
 sample/*
+segmentation/models/*
