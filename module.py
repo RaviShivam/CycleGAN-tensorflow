@@ -91,7 +91,7 @@ def generator_unet(image, options, reuse=False, name="generator"):
         return tf.nn.tanh(d8)
 
 
-def generator_resnet(image, options, reuse=False, name="generator"):
+def generator_resnet(image, bboxargs, options, reuse=False, name="generator"):
 
     with tf.variable_scope(name):
         # image is 256 x 256 x input_c_dim
@@ -108,10 +108,12 @@ def generator_resnet(image, options, reuse=False, name="generator"):
             y = instance_norm(conv2d(y, dim, ks, s, padding='VALID', name=name+'_c2'), name+'_bn2')
             return y + x
 
+        seg_image = tf.py_func(batch_extract_real, [image, bboxargs, options.crop_size], tf.float32)
+        seg_image = tf.reshape(seg_image, shape=(1, options.crop_size, options.crop_size, 3))
         # Justin Johnson's model from https://github.com/jcjohnson/fast-neural-style/
         # The network with 9 blocks consists of: c7s1-32, d64, d128, R128, R128, R128,
         # R128, R128, R128, R128, R128, R128, u64, u32, c7s1-3
-        c0 = tf.pad(image, [[0, 0], [3, 3], [3, 3], [0, 0]], "REFLECT")
+        c0 = tf.pad(seg_image, [[0, 0], [3, 3], [3, 3], [0, 0]], "REFLECT")
         c1 = tf.nn.relu(instance_norm(conv2d(c0, options.gf_dim, 7, 1, padding='VALID', name='g_e1_c'), 'g_e1_bn'))
         c2 = tf.nn.relu(instance_norm(conv2d(c1, options.gf_dim*2, 3, 2, name='g_e2_c'), 'g_e2_bn'))
         c3 = tf.nn.relu(instance_norm(conv2d(c2, options.gf_dim*4, 3, 2, name='g_e3_c'), 'g_e3_bn'))
@@ -131,8 +133,10 @@ def generator_resnet(image, options, reuse=False, name="generator"):
         d2 = deconv2d(d1, options.gf_dim, 3, 2, name='g_d2_dc')
         d2 = tf.nn.relu(instance_norm(d2, 'g_d2_bn'))
         d2 = tf.pad(d2, [[0, 0], [3, 3], [3, 3], [0, 0]], "REFLECT")
-        pred = tf.nn.tanh(conv2d(d2, options.output_c_dim, 7, 1, padding='VALID', name='g_pred_c'))
+        pred_seg = tf.nn.tanh(conv2d(d2, options.output_c_dim, 7, 1, padding='VALID', name='g_pred_c'))
 
+        pred = tf.py_func(batch_refit_fake, [image, pred_seg, bboxargs], tf.float32)
+        pred = tf.reshape(pred, shape=(1, options.image_size, options.image_size, 3))
         return pred
 
 

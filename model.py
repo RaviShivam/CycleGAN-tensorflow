@@ -22,20 +22,17 @@ class cyclegan(object):
         self.dataset_dir = args.dataset_dir
 
         self.discriminator = discriminator
-        if args.use_resnet:
-            self.generator = generator_resnet
-        else:
-            self.generator = generator_unet
+        self.generator = generator_resnet
         if args.use_lsgan:
             self.criterionGAN = mae_criterion
         else:
             self.criterionGAN = sce_criterion
 
         OPTIONS = namedtuple('OPTIONS', 'batch_size image_size \
-                              gf_dim df_dim output_c_dim is_training')
+                              gf_dim df_dim output_c_dim is_training crop_size')
         self.options = OPTIONS._make((args.batch_size, args.fine_size,
                                       args.ngf, args.ndf, args.output_nc,
-                                      args.phase == 'train'))
+                                      args.phase == 'train', args.crop_size))
 
         self._build_model()
         self.saver = tf.train.Saver()
@@ -47,26 +44,33 @@ class cyclegan(object):
                                          self.input_c_dim + self.output_c_dim],
                                         name='real_A_and_B_images')
 
+        self.bboxA_arguments = tf.placeholder(tf.int32, shape=[4], name='bboxargsA')
+        self.bboxB_arguments = tf.placeholder(tf.int32, shape=[4], name='bboxargsB')
+
         self.real_A = self.real_data[:, :, :, :self.input_c_dim]
         self.real_B = self.real_data[:, :, :, self.input_c_dim:self.input_c_dim + self.output_c_dim]
 
-        self.fake_B = self.generator(self.real_A, self.options, False, name="generatorA2B")
-        self.fake_A_ = self.generator(self.fake_B, self.options, False, name="generatorB2A")
-        self.fake_A = self.generator(self.real_B, self.options, True, name="generatorB2A")
-        self.fake_B_ = self.generator(self.fake_A, self.options, True, name="generatorA2B")
+        self.fake_B = self.generator(image=self.real_A, bboxargs=self.bboxA_arguments, options=self.options,
+                                     reuse=False, name="generatorA2B")
+        self.fake_A_ = self.generator(image=self.fake_B, bboxargs=self.bboxA_arguments, options=self.options,
+                                      reuse=False, name="generatorB2A")
+        self.fake_A = self.generator(image=self.real_B, bboxargs=self.bboxB_arguments, options=self.options,
+                                     reuse=True, name="generatorB2A")
+        self.fake_B_ = self.generator(image=self.fake_A, bboxargs=self.bboxB_arguments, options=self.options,
+                                      reuse=True, name="generatorA2B")
 
         self.DB_fake = self.discriminator(self.fake_B, self.options, reuse=False, name="discriminatorB")
         self.DA_fake = self.discriminator(self.fake_A, self.options, reuse=False, name="discriminatorA")
         self.g_loss_a2b = self.criterionGAN(self.DB_fake, tf.ones_like(self.DB_fake)) \
-            + self.L1_lambda * abs_criterion(self.real_A, self.fake_A_) \
-            + self.L1_lambda * abs_criterion(self.real_B, self.fake_B_)
+                          + self.L1_lambda * abs_criterion(self.real_A, self.fake_A_) \
+                          + self.L1_lambda * abs_criterion(self.real_B, self.fake_B_)
         self.g_loss_b2a = self.criterionGAN(self.DA_fake, tf.ones_like(self.DA_fake)) \
-            + self.L1_lambda * abs_criterion(self.real_A, self.fake_A_) \
-            + self.L1_lambda * abs_criterion(self.real_B, self.fake_B_)
+                          + self.L1_lambda * abs_criterion(self.real_A, self.fake_A_) \
+                          + self.L1_lambda * abs_criterion(self.real_B, self.fake_B_)
         self.g_loss = self.criterionGAN(self.DA_fake, tf.ones_like(self.DA_fake)) \
-            + self.criterionGAN(self.DB_fake, tf.ones_like(self.DB_fake)) \
-            + self.L1_lambda * abs_criterion(self.real_A, self.fake_A_) \
-            + self.L1_lambda * abs_criterion(self.real_B, self.fake_B_)
+                      + self.criterionGAN(self.DB_fake, tf.ones_like(self.DB_fake)) \
+                      + self.L1_lambda * abs_criterion(self.real_A, self.fake_A_) \
+                      + self.L1_lambda * abs_criterion(self.real_B, self.fake_B_)
 
         self.fake_A_sample = tf.placeholder(tf.float32,
                                             [None, self.image_size, self.image_size,
@@ -110,8 +114,10 @@ class cyclegan(object):
         self.test_B = tf.placeholder(tf.float32,
                                      [None, self.image_size, self.image_size,
                                       self.output_c_dim], name='test_B')
-        self.testB = self.generator(self.test_A, self.options, True, name="generatorA2B")
-        self.testA = self.generator(self.test_B, self.options, True, name="generatorB2A")
+        self.testB = self.generator(image=self.test_A, bboxargs=self.bboxA_arguments, options=self.options, reuse=True,
+                                    name="generatorA2B")
+        self.testA = self.generator(image=self.test_B, bboxargs=self.bboxB_arguments, options=self.options, reuse=True,
+                                    name="generatorB2A")
 
         t_vars = tf.trainable_variables()
         self.d_vars = [var for var in t_vars if 'discriminator' in var.name]
@@ -125,6 +131,8 @@ class cyclegan(object):
             .minimize(self.d_loss, var_list=self.d_vars)
         self.g_optim = tf.train.AdamOptimizer(self.lr, beta1=args.beta1) \
             .minimize(self.g_loss, var_list=self.g_vars)
+
+        bbox_temp = tf.constant([0, 0, 100, 100], dtype=tf.float32)
 
         init_op = tf.global_variables_initializer()
         self.sess.run(init_op)
@@ -145,18 +153,22 @@ class cyclegan(object):
             np.random.shuffle(dataA)
             np.random.shuffle(dataB)
             batch_idxs = min(min(len(dataA), len(dataB)), args.train_size) // self.batch_size
-            lr = args.lr if epoch < args.epoch_step else args.lr*(args.epoch-epoch)/(args.epoch-args.epoch_step)
+            lr = args.lr if epoch < args.epoch_step else args.lr * (args.epoch - epoch) / (args.epoch - args.epoch_step)
 
             for idx in range(0, batch_idxs):
                 batch_files = list(zip(dataA[idx * self.batch_size:(idx + 1) * self.batch_size],
                                        dataB[idx * self.batch_size:(idx + 1) * self.batch_size]))
-                batch_images = [load_train_data(batch_file, args.load_size, args.fine_size) for batch_file in batch_files]
+                batch_images = [load_train_data(batch_file, args.load_size, args.fine_size) for batch_file in
+                                batch_files]
                 batch_images = np.array(batch_images).astype(np.float32)
 
                 # Update G network and record fake outputs
                 fake_A, fake_B, _, summary_str = self.sess.run(
                     [self.fake_A, self.fake_B, self.g_optim, self.g_sum],
-                    feed_dict={self.real_data: batch_images, self.lr: lr})
+                    feed_dict={self.real_data: batch_images,
+                               self.bboxA_arguments: bbox_temp,
+                               self.bboxB_arguments: bbox_temp,
+                               self.lr: lr})
                 self.writer.add_summary(summary_str, counter)
                 [fake_A, fake_B] = self.pool([fake_A, fake_B])
 
@@ -211,7 +223,8 @@ class cyclegan(object):
         np.random.shuffle(dataA)
         np.random.shuffle(dataB)
         batch_files = list(zip(dataA[:self.batch_size], dataB[:self.batch_size]))
-        sample_images = [load_train_data(batch_file, self.load_size, self.image_size, is_testing=True) for batch_file in batch_files]
+        sample_images = [load_train_data(batch_file, self.load_size, self.image_size, is_testing=True) for batch_file in
+                         batch_files]
         sample_images = np.array(sample_images).astype(np.float32)
 
         fake_A, fake_B = self.sess.run(
@@ -258,8 +271,8 @@ class cyclegan(object):
             save_images(fake_img, [1, 1], image_path)
             index.write("<td>%s</td>" % os.path.basename(image_path))
             index.write("<td><img src='%s'></td>" % (sample_file if os.path.isabs(sample_file) else (
-                '..' + os.path.sep + sample_file)))
+                    '..' + os.path.sep + sample_file)))
             index.write("<td><img src='%s'></td>" % (image_path if os.path.isabs(image_path) else (
-                '..' + os.path.sep + image_path)))
+                    '..' + os.path.sep + image_path)))
             index.write("</tr>")
         index.close()
