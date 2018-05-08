@@ -7,4 +7,5 @@ checkpoint/*
 datasets/*
 test/*
 sample/*
+out/*
 segmentation/models/*
