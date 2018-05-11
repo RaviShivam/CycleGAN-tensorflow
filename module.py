@@ -145,10 +145,7 @@ def generator_resnet(image, bboxargs, options, reuse=False, name="generator"):
         b = [y0, options.image_size - (y0 + w)]
         # a = [0, 156]
         # b = [0, 156]
-        paddings = tf.Variable([[0, 0],
-                                a,
-                                b,
-                                [0, 0]])
+        paddings = tf.Variable([[0, 0], a, b, [0, 0]])
         generated_pad = tf.pad(pred_seg, paddings, mode="CONSTANT", constant_values=0)
         image_frame_pad = tf.pad(tf.zeros_like(pred_seg), paddings, mode="CONSTANT", constant_values=1)
         image_frame = tf.multiply(image, image_frame_pad)

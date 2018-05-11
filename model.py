@@ -132,7 +132,7 @@ class cyclegan(object):
         self.g_optim = tf.train.AdamOptimizer(self.lr, beta1=args.beta1) \
             .minimize(self.g_loss, var_list=self.g_vars)
 
-        self.bbox_temp = [0, 0, 100, 100]
+        self.bbox_temp = [50, 25, 150, 175]
 
         init_op = tf.global_variables_initializer()
         self.sess.run(init_op, feed_dict={self.bboxA_arguments: self.bbox_temp,

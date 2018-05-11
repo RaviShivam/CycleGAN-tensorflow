@@ -138,25 +138,3 @@ def transform(image, npx=64, is_crop=True, resize_w=64):
 def inverse_transform(images):
     return (images + 1.) / 2.
 
-
-def batch_extract_real(image, bboxargs, crop_size):
-    extract = crop_and_resize_real(image[0, :, :, :], bboxargs, crop_size)
-    extract = np.reshape(extract, (1, crop_size, crop_size, 3))
-    return extract
-
-def batch_refit_fake(frame, crop_image, bbox_args):
-    refit = crop_and_resize_real(frame[0, :, :, :], crop_image[0, :, :, :], bbox_args)
-    refit = np.reshape(refit, frame.shape)
-    return refit
-
-def crop_and_resize_real(image, bboxargs, crop_size):
-    x0, y0, h, w = bboxargs
-    processed = image[x0:x0+h, y0:y0+w, :]
-    processed = scipy.misc.imresize(processed, [crop_size, crop_size])
-    return processed.astype(np.float32)
-
-def resize_and_refit_fake(frame, cropimage, bboxargs):
-    x0, y0, h, w = bboxargs
-    processed = scipy.misc.imresize(cropimage, [h, w])
-    frame[x0:x0+h, y0:y0+w] = processed
-    return frame.astype(np.float32)
