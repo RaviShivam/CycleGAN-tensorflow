@@ -8,6 +8,7 @@ import scipy.misc
 import numpy as np
 import tensorflow as tf
 import copy
+import pickle
 
 try:
     _imread = scipy.misc.imread
@@ -45,31 +46,41 @@ class ImagePool(object):
         else:
             return image
 
+def load_bounding_boxes_complete(dataset):
+    with open('./datasets/{}/bboxA.p'.format(dataset), 'rb') as f:
+        u = pickle._Unpickler(f)
+        u.encoding = 'latin1'
+        bboxAfull = u.load()
 
-def load_test_data(image_path, fine_size=256):
+    with open('./datasets/{}/bboxB.p'.format(dataset), 'rb') as f:
+        u = pickle._Unpickler(f)
+        u.encoding = 'latin1'
+        bboxBfull = u.load()
+
+    return [bboxAfull, bboxBfull]
+
+
+def load_bounding_box_real(batch_files, bboxAfull, bboxBfull):
+    bboxA_real = bboxAfull[batch_files[0].split("/")[-1]]
+    bboxB_real = bboxBfull[batch_files[1].split("/")[-1]]
+    bboxA_real = [bboxA_real[1], bboxA_real[0], bboxA_real[3], bboxA_real[2]]
+    bboxB_real = [bboxB_real[1], bboxB_real[0], bboxB_real[3], bboxB_real[2]]
+    return np.array(bboxA_real).astype(int), np.array(bboxB_real).astype(int)
+
+
+
+def load_test_data(image_path, image_size):
     img = imread(image_path)
-    img = scipy.misc.imresize(img, [fine_size, fine_size])
+    img = scipy.misc.imresize(img, [image_size, image_size])
     img = img / 127.5 - 1
     return img
 
 
-def load_train_data(image_path, load_size=286, fine_size=256, is_testing=False):
+def load_train_data(image_path, fine_size):
     img_A = imread(image_path[0])
     img_B = imread(image_path[1])
-    if not is_testing:
-        img_A = scipy.misc.imresize(img_A, [load_size, load_size])
-        img_B = scipy.misc.imresize(img_B, [load_size, load_size])
-        h1 = int(np.ceil(np.random.uniform(1e-2, load_size - fine_size)))
-        w1 = int(np.ceil(np.random.uniform(1e-2, load_size - fine_size)))
-        img_A = img_A[h1:h1 + fine_size, w1:w1 + fine_size]
-        img_B = img_B[h1:h1 + fine_size, w1:w1 + fine_size]
-
-        if np.random.random() > 0.5:
-            img_A = np.fliplr(img_A)
-            img_B = np.fliplr(img_B)
-    else:
-        img_A = scipy.misc.imresize(img_A, [fine_size, fine_size])
-        img_B = scipy.misc.imresize(img_B, [fine_size, fine_size])
+    img_A = scipy.misc.imresize(img_A, [fine_size, fine_size])
+    img_B = scipy.misc.imresize(img_B, [fine_size, fine_size])
 
     img_A = img_A / 127.5 - 1.
     img_B = img_B / 127.5 - 1.
@@ -78,7 +89,15 @@ def load_train_data(image_path, load_size=286, fine_size=256, is_testing=False):
     # img_AB shape: (fine_size, fine_size, input_c_dim + output_c_dim)
     return img_AB
 
-
+def create_bbox_mask(bbox, full_image_shape):
+    y0, x0, w, h = bbox
+    nbbx = [x0, y0, h, w]
+    mask = np.ones([h, w])
+    a = [x0, full_image_shape[0] - (x0 + h)]
+    b = [y0, full_image_shape[1] - (y0 + w)]
+    padding = [a, b]
+    mask = np.pad(mask, padding, mode="constant")
+    return mask
 # -----------------------------
 
 def get_image(image_path, image_size, is_crop=True, resize_w=64, is_grayscale=False):
