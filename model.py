@@ -44,8 +44,8 @@ class cyclegan(object):
                                          self.input_c_dim + self.output_c_dim],
                                         name='real_A_and_B_images')
 
-        self.bboxA_arguments = tf.placeholder(tf.int32, shape=[4], name='bboxargsA')
-        self.bboxB_arguments = tf.placeholder(tf.int32, shape=[4], name='bboxargsB')
+        self.bboxA_arguments = tf.placeholder(tf.int32, shape=[4])
+        self.bboxB_arguments = tf.placeholder(tf.int32, shape=[4])
 
         self.real_A = self.real_data[:, :, :, :self.input_c_dim]
         self.real_B = self.real_data[:, :, :, self.input_c_dim:self.input_c_dim + self.output_c_dim]
@@ -132,10 +132,11 @@ class cyclegan(object):
         self.g_optim = tf.train.AdamOptimizer(self.lr, beta1=args.beta1) \
             .minimize(self.g_loss, var_list=self.g_vars)
 
-        bbox_temp = tf.constant([0, 0, 100, 100], dtype=tf.float32)
+        self.bbox_temp = [0, 0, 100, 100]
 
         init_op = tf.global_variables_initializer()
-        self.sess.run(init_op)
+        self.sess.run(init_op, feed_dict={self.bboxA_arguments: self.bbox_temp,
+                                          self.bboxB_arguments: self.bbox_temp})
         self.writer = tf.summary.FileWriter("./logs", self.sess.graph)
 
         counter = 1
@@ -166,8 +167,8 @@ class cyclegan(object):
                 fake_A, fake_B, _, summary_str = self.sess.run(
                     [self.fake_A, self.fake_B, self.g_optim, self.g_sum],
                     feed_dict={self.real_data: batch_images,
-                               self.bboxA_arguments: bbox_temp,
-                               self.bboxB_arguments: bbox_temp,
+                               self.bboxA_arguments: self.bbox_temp,
+                               self.bboxB_arguments: self.bbox_temp,
                                self.lr: lr})
                 self.writer.add_summary(summary_str, counter)
                 [fake_A, fake_B] = self.pool([fake_A, fake_B])
@@ -229,7 +230,9 @@ class cyclegan(object):
 
         fake_A, fake_B = self.sess.run(
             [self.fake_A, self.fake_B],
-            feed_dict={self.real_data: sample_images}
+            feed_dict={self.real_data: sample_images,
+                       self.bboxA_arguments: self.bbox_temp,
+                       self.bboxB_arguments: self.bbox_temp}
         )
         save_images(fake_A, [self.batch_size, 1],
                     './{}/A_{:02d}_{:04d}.jpg'.format(sample_dir, epoch, idx))
@@ -239,7 +242,8 @@ class cyclegan(object):
     def test(self, args):
         """Test cyclegan"""
         init_op = tf.global_variables_initializer()
-        self.sess.run(init_op)
+        self.sess.run(init_op, feed_dict={self.bboxA_arguments: self.bbox_temp,
+                                          self.bboxB_arguments: self.bbox_temp})
         if args.which_direction == 'AtoB':
             sample_files = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/testA'))
         elif args.which_direction == 'BtoA':
@@ -267,7 +271,10 @@ class cyclegan(object):
             sample_image = np.array(sample_image).astype(np.float32)
             image_path = os.path.join(args.test_dir,
                                       '{0}_{1}'.format(args.which_direction, os.path.basename(sample_file)))
-            fake_img = self.sess.run(out_var, feed_dict={in_var: sample_image})
+            fake_img = self.sess.run(out_var, feed_dict={in_var: sample_image,
+                                                         self.bboxA_arguments: self.bbox_temp,
+                                                         self.bboxB_arguments: self.bbox_temp
+                                                         })
             save_images(fake_img, [1, 1], image_path)
             index.write("<td>%s</td>" % os.path.basename(image_path))
             index.write("<td><img src='%s'></td>" % (sample_file if os.path.isabs(sample_file) else (
