@@ -1,6 +1,7 @@
 __pycache__
 *.pyc
 .idea/*
+*.iml
 logs/*
 checkpoint/*
 datasets/*

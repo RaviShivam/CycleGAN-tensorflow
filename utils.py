@@ -123,3 +123,18 @@ def transform(image, npx=64, is_crop=True, resize_w=64):
 
 def inverse_transform(images):
     return (images+1.)/2.
+	
+
+
+def crop_and_resize(imageIn, topLeftX, topLeftY, objectWidth, objectHeight, targetWidth, targetHeight):
+	#--First we Crop, then we Resize
+	#--Crop: (Uses PIL)
+	#croppedImage = imageIn.crop(topLeftX,topLeftY, objectWidth, objectHeight)
+	#--Crop, second option
+	croppedImage = imageIn[topLeftY:(topLeftY+objectHeight),topLeftX:(topLeftX+objectWidth)]
+	#--Resize 
+	resizedImage = scipy.misc.imresize(croppedImage, [targetHeight, targetWidth])
+	return resizedImage
+	
+
+
