@@ -8,4 +8,5 @@ datasets/*
 test/*
 sample/*
 out/*
+*.zip
 segmentation/models/*

@@ -189,14 +189,16 @@ class cyclegan(object):
                 self.writer.add_summary(summary_str, counter)
 
                 counter += 1
-                print(("Epoch: [%2d] [%4d/%4d] time: %4.4f" % (
-                    epoch, idx, batch_idxs, time.time() - start_time)))
 
                 if np.mod(counter, args.print_freq) == 1:
                     self.sample_model(args.sample_dir, epoch, idx)
+                    print(("Epoch: [%2d] [%4d/%4d] time: %4.4f"
+                           % (epoch, idx, batch_idxs, time.time() - start_time)))
 
                 if np.mod(counter, args.save_freq) == 2:
+                    print("Checkpointing model... Do not stop execution")
                     self.save(args.checkpoint_dir, counter)
+                    print("Model saving complete!")
 
     def save(self, checkpoint_dir, step):
         model_name = "cyclegan.model"
