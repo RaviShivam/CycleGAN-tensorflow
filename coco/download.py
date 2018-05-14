@@ -20,6 +20,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-ds", "--dataset", default="train", help="Dataset [train, val]")
 parser.add_argument("-rs", "--resolution", default=512, help="Resolution of downloaded images", type=int)
 parser.add_argument("-c", "--category", default="horse", help="Which COCO category to download")
+parser.add_argument("-mb", "--minbboxsize", default=96, help="Images where all bounding  boxes are smaller than this value are not downloaded (of original image resolution) ", type=int)
 
 args = parser.parse_args()
 
@@ -27,6 +28,8 @@ print('Attempting to download {} data for "{}" in resolution {}. One eye can of 
 print('Options: e.g. "--dataset val", "--resolution 420", "--category zebra"')
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
+
+MIN_BBOX_SIZE = args.minbboxsize
 
 def load_annotations():
     annotation_filename = 'instances_{}2017.json'.format(args.dataset)
@@ -44,7 +47,7 @@ def load_annotations():
 
         print('unzipping...')
         zip_ref = zipfile.ZipFile(download_path, 'r')
-        zip_ref.extractall(annotation_dir)
+        zip_ref.extractall(os.path.join(dir_path, 'coco-api'))
         zip_ref.close()
 
         print('cleaning up...')
@@ -58,15 +61,28 @@ def getFileName(url):
 
 
 def saveBoundingBoxes(coco, imgs):
+    good_img_ids = []
     bboxes = {}
     for img in imgs:
         annIds = coco.getAnnIds(imgIds=img['id'], catIds=catIds, iscrowd=None)
         w, h = img['width'], img['height']
         # Store all bounding boxes
-        anns = coco.loadAnns([annIds[0]])
+        anns = coco.loadAnns(annIds)
         img_masks = [coco.annToMask(ann) for ann in anns]
         bin_masks = [pycocotools.mask.encode(img_mask) for img_mask in img_masks]
         img_bboxes = [pycocotools.mask.toBbox(bin_mask) for bin_mask in bin_masks]
+
+        good_size = False
+        for bbox in img_bboxes:
+            if bbox[2] > MIN_BBOX_SIZE and bbox[3] > MIN_BBOX_SIZE:
+                good_size = True
+                break
+        
+        if not good_size:
+            continue
+
+        good_img_ids.append(img['id'])
+
         sqr_bboxes = [adjust_bbox_square(bbox, (w, h), args.resolution) for bbox in img_bboxes]
         filename = getFileName(img['coco_url'])
         bboxes[filename] = sqr_bboxes
@@ -77,6 +93,8 @@ def saveBoundingBoxes(coco, imgs):
     with open(bbox_path, 'wb') as fp:
         pickle.dump(bboxes, fp, protocol=pickle.HIGHEST_PROTOCOL)
         print('Saved bboxes as pickle into "{}"'.format(bbox_path))
+
+    return good_img_ids
 
 
 def adjust_bbox_square(bbox, im_size, max_size):
@@ -139,9 +157,10 @@ if __name__ == '__main__':
         os.makedirs(data_path)
 
     print('Saving bounding boxes...')
-    saveBoundingBoxes(coco, imgs)
+    good_img_ids = saveBoundingBoxes(coco, imgs)
 
     print('Downloading images (might take a while...)')
-    downloadImages(imgs)
+    good_imgs = coco.loadImgs(good_img_ids)
+    downloadImages(good_imgs)
 
     print('Done!')
