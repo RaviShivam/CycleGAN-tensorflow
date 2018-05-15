@@ -6,3 +6,4 @@ checkpoint/*
 datasets/*
 test/*
 sample/*
+*.tar.gz
