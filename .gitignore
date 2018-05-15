@@ -7,3 +7,4 @@ datasets/*
 test/*
 sample/*
 *.tar.gz
+segmentation/faster_rcnn_nas_coco_2018_01_28/*
