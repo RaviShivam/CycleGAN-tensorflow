@@ -17,10 +17,10 @@ import pycocotools.mask
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("-ds", "--dataset", default="train", help="Dataset [train, val]")
-parser.add_argument("-rs", "--resolution", default=512, help="Resolution of downloaded images", type=int)
-parser.add_argument("-c", "--category", default="horse", help="Which COCO category to download")
-parser.add_argument("-mb", "--minbboxsize", default=96, help="Images where all bounding  boxes are smaller than this value are not downloaded (of original image resolution) ", type=int)
+parser.add_argument("-ds", "--dataset", default="val", help="Dataset [train, val]")
+parser.add_argument("-rs", "--resolution", default=300, help="Resolution of downloaded images", type=int)
+parser.add_argument("-c", "--category", default="zebra", help="Which COCO category to download")
+parser.add_argument("-mb", "--minbboxsize", default=30, help="Images where all bounding  boxes are smaller than this value are not downloaded (of original image resolution) ", type=int)
 
 args = parser.parse_args()
 
@@ -105,6 +105,7 @@ def adjust_bbox_square(bbox, im_size, max_size):
     scalar = max_size / max_s
     t_x, t_y = (max_size - new_size[0]) // 2, (max_size - new_size[1]) // 2 # translation
     res = [bbox[0] * scalar + t_x, bbox[1] * scalar + t_y, bbox[2] * scalar, bbox[3] * scalar]
+    res = [res[1], res[0], res[3], res[2]]
     return [round(x) for x in res]
 
 
