@@ -140,7 +140,32 @@ def downloadImages(imgs):
 
     # download 4 files at a time
     urls = [img['coco_url'] for img in imgs]
-    Pool(4).map(download_img, urls) 
+    Pool(4).map(download_img, urls)
+
+
+def save_masks(coco, imgs):
+    download_path = os.path.normpath(os.path.join(dir_path, '..', 'datasets', '{}_{}_{}'.format(args.category, args.resolution, args.dataset)))
+    for img in imgs:
+        annIds = coco.getAnnIds(imgIds=img['id'], catIds=catIds, iscrowd=None)
+        anns = coco.loadAnns(annIds)
+        img_masks = [coco.annToMask(ann) for ann in anns]
+
+        mask_res = img_masks[0]
+
+        for (index, img_mask) in enumerate(img_masks):
+            if index == 0:
+                continue
+            mask_res = mask_res + img_mask
+
+        mask_res[mask_res > 0] = 255
+
+        pil_mask = Image.fromarray(mask_res)
+        square_im = make_square(pil_mask, args.resolution)
+
+        filename = 'mask_{}.png'.format(getFileName(img['coco_url'])[:-4])
+        path = os.path.join(download_path, filename)
+        square_im.save(path)
+
 
 
 if __name__ == '__main__':
@@ -149,6 +174,7 @@ if __name__ == '__main__':
 
     catIds = coco.getCatIds(catNms=[category_to_download])
     imgIds = coco.getImgIds(catIds=catIds)
+
     imgs = coco.loadImgs(imgIds)
     print('Found {} images of the "{}" category'.format(len(imgIds), category_to_download))
 
@@ -162,5 +188,7 @@ if __name__ == '__main__':
     print('Downloading images (might take a while...)')
     good_imgs = coco.loadImgs(good_img_ids)
     downloadImages(good_imgs)
+
+    save_masks(coco, good_imgs)
 
     print('Done!')
