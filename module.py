@@ -109,7 +109,8 @@ def generator_resnet(image, bboxargs, options, reuse=False, name="generator"):
         x0, y0, h, w = [bboxargs[0], bboxargs[1], bboxargs[2], bboxargs[3]]
 
         seg_image = image[:, x0:x0 + h, y0:y0 + w, :]
-        original_bb_shape = tf.shape(seg_image)
+        seg_shape = tf.shape(seg_image)
+        oh, ow = seg_shape[1], seg_shape[2]
         seg_image = tf.image.resize_images(seg_image,
                                            tf.constant([options.crop_size, options.crop_size]))
         ###########################
@@ -140,14 +141,14 @@ def generator_resnet(image, bboxargs, options, reuse=False, name="generator"):
         pred_seg = tf.nn.tanh(conv2d(d2, options.output_c_dim, 7, 1, padding='VALID', name='g_pred_c'))
 
         ###########################
-        pred_seg = tf.image.resize_images(pred_seg, original_bb_shape[1:-1])
-        a = [x0, options.image_size - (x0 + h)]
-        b = [y0, options.image_size - (y0 + w)]
+        pred_seg = tf.image.resize_images(pred_seg, [oh, ow])
 
-        paddings = tf.Variable([[0, 0], a, b, [0, 0]])
-        generated_pad = tf.pad(pred_seg, paddings, mode="CONSTANT", constant_values=0)
-        image_frame_pad = tf.pad(tf.zeros_like(pred_seg), paddings, mode="CONSTANT", constant_values=1)
-        # print(generated_pad.shape)
+        a = [bboxargs[0], (options.image_size - (x0 + h))]
+        b = [bboxargs[1], (options.image_size - (y0 + w))]
+
+        generated_pad = tf.pad(pred_seg, [[0, 0], a, b, [0, 0]], mode="CONSTANT", constant_values=0)
+        image_frame_pad = tf.pad(tf.zeros_like(pred_seg), [[0, 0], a, b, [0, 0]], mode="CONSTANT", constant_values=1)
+
         image_frame = tf.multiply(image, image_frame_pad)
         pred = tf.add(generated_pad, image_frame)
         ###########################

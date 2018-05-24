@@ -61,11 +61,9 @@ def load_bounding_boxes_complete(dataset):
 
 
 def load_bounding_box_real(batch_files, bboxAfull, bboxBfull):
-    bboxA_real = bboxAfull[batch_files[0].split("/")[-1]]
-    bboxB_real = bboxBfull[batch_files[1].split("/")[-1]]
-    bboxA_real = [bboxA_real[1], bboxA_real[0], bboxA_real[3], bboxA_real[2]]
-    bboxB_real = [bboxB_real[1], bboxB_real[0], bboxB_real[3], bboxB_real[2]]
-    return np.array(bboxA_real).astype(int), np.array(bboxB_real).astype(int)
+    bboxA_real = np.array(bboxAfull[batch_files[0].split("/")[-1]])
+    bboxB_real = np.array(bboxBfull[batch_files[1].split("/")[-1]])
+    return bboxA_real.astype(int), bboxB_real.astype(int)
 
 
 
