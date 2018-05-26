@@ -51,7 +51,7 @@ def run_inference_for_single_image(image, graph):
                 detection_masks_reframed = utils_ops.reframe_box_masks_to_image_masks(
                     detection_masks, detection_boxes, image.shape[0], image.shape[1])
                 detection_masks_reframed = tf.cast(
-                    tf.greater(detection_masks_reframed, 0.5), tf.uint8)
+                    tf.greater(detection_masks_reframed, 0.1), tf.uint8)
                 # Follow the convention by adding back the batch dimension
                 tensor_dict['detection_masks'] = tf.expand_dims(
                     detection_masks_reframed, 0)
@@ -74,7 +74,7 @@ def run_inference_for_single_image(image, graph):
 
 # What model to download.
 # MODEL_NAME = 'faster_rcnn_nas_coco_2018_01_28'  # 'ssd_mobilenet_v1_coco_2017_11_17'
-MODEL_NAME = 'mask_rcnn_inception_resnet_v2_atrous_coco'  # 'ssd_mobilenet_v1_coco_2017_11_17'
+MODEL_NAME = 'mask_rcnn_inception_resnet_v2_atrous_coco_2018_01_28'  # 'ssd_mobilenet_v1_coco_2017_11_17'
 MODEL_FILE = MODEL_NAME + '.tar.gz'
 DOWNLOAD_BASE = 'http://download.tensorflow.org/models/object_detection/'
 
@@ -116,7 +116,9 @@ def load_model_into_memory():
     category_index = label_map_util.create_category_index(categories)
 
 
+print("download_detection_model")
 download_detection_model()
+print("load_model_into_memory")
 load_model_into_memory()
 
 # Detection
