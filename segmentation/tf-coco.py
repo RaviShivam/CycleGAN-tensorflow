@@ -73,7 +73,8 @@ def run_inference_for_single_image(image, graph):
 
 
 # What model to download.
-MODEL_NAME = 'faster_rcnn_nas_coco_2018_01_28'  # 'ssd_mobilenet_v1_coco_2017_11_17'
+# MODEL_NAME = 'faster_rcnn_nas_coco_2018_01_28'  # 'ssd_mobilenet_v1_coco_2017_11_17'
+MODEL_NAME = 'mask_rcnn_inception_resnet_v2_atrous_coco'  # 'ssd_mobilenet_v1_coco_2017_11_17'
 MODEL_FILE = MODEL_NAME + '.tar.gz'
 DOWNLOAD_BASE = 'http://download.tensorflow.org/models/object_detection/'
 
@@ -85,7 +86,7 @@ PATH_TO_LABELS = os.path.join('object_detection', 'data', 'mscoco_label_map.pbtx
 NUM_CLASSES = 90
 
 
-def download_model():
+def download_detection_model():
     # download model if it doesn't exist
     if not os.path.isfile(PATH_TO_CKPT):
         print("dowloading model")
@@ -115,7 +116,7 @@ def load_model_into_memory():
     category_index = label_map_util.create_category_index(categories)
 
 
-download_model()
+download_detection_model()
 load_model_into_memory()
 
 # Detection
@@ -129,6 +130,8 @@ IMAGE_SIZE = (12, 8)
 for image_path in TEST_IMAGE_PATHS:
     print("Detecting objects on", image_path)
     image = Image.open(image_path)
+    # resize the image
+    # image.thumbnail((200, 200), Image.ANTIALIAS)
     # the array based representation of the image will be used later in order to prepare the
     # result image with boxes and labels on it.
     image_np = load_image_into_numpy_array(image)
@@ -149,4 +152,4 @@ for image_path in TEST_IMAGE_PATHS:
         line_thickness=8)
     plt.figure(figsize=IMAGE_SIZE)
     plt.imshow(image_np)
-    plt.savefig("zebra1_detected.png")
+    plt.savefig("zebra3_detected.png")
