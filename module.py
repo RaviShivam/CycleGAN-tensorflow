@@ -89,7 +89,7 @@ def generator_unet(image, options, reuse=False, name="generator"):
         return tf.nn.tanh(d8)
 
 
-def generator_resnet(image, bboxargs, options, reuse=False, name="generator"):
+def generator_resnet(image, mask, options, reuse=False, name="generator"):
     with tf.variable_scope(name):
         # image is 256 x 256 x input_c_dim
         if reuse:
@@ -106,13 +106,11 @@ def generator_resnet(image, bboxargs, options, reuse=False, name="generator"):
             return y + x
 
         ###########################
-        x0, y0, h, w = [bboxargs[0], bboxargs[1], bboxargs[2], bboxargs[3]]
-
-        seg_image = image[:, x0:x0 + h, y0:y0 + w, :]
-        seg_shape = tf.shape(seg_image)
-        oh, ow = seg_shape[1], seg_shape[2]
-        seg_image = tf.image.resize_images(seg_image,
-                                           tf.constant([options.crop_size, options.crop_size]))
+        seg_image = tf.pad(image, [[0, 0], [0, 0], [0, 0], [0, 1]])
+        mask = tf.expand_dims(mask, 0)
+        mask = tf.expand_dims(mask, -1)
+        mask = tf.pad(mask, [[0, 0], [0, 0], [0, 0], [3, 0]])
+        seg_image = seg_image + mask
         ###########################
 
         # Justin Johnson's model from https://github.com/jcjohnson/fast-neural-style/
@@ -141,16 +139,7 @@ def generator_resnet(image, bboxargs, options, reuse=False, name="generator"):
         pred_seg = tf.nn.tanh(conv2d(d2, options.output_c_dim, 7, 1, padding='VALID', name='g_pred_c'))
 
         ###########################
-        pred_seg = tf.image.resize_images(pred_seg, [oh, ow])
 
-        a = [bboxargs[0], (options.image_size - (x0 + h))]
-        b = [bboxargs[1], (options.image_size - (y0 + w))]
-
-        generated_pad = tf.pad(pred_seg, [[0, 0], a, b, [0, 0]], mode="CONSTANT", constant_values=0)
-        image_frame_pad = tf.pad(tf.zeros_like(pred_seg), [[0, 0], a, b, [0, 0]], mode="CONSTANT", constant_values=1)
-
-        image_frame = tf.multiply(image, image_frame_pad)
-        pred = tf.add(generated_pad, image_frame)
         ###########################
 
         return pred

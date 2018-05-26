@@ -48,8 +48,8 @@ class cyclegan(object):
                                          self.input_c_dim + self.output_c_dim],
                                         name='real_A_and_B_images')
 
-        self.bboxA_arguments = tf.placeholder(tf.int32, shape=[4], name="boundingBoxA")
-        self.bboxB_arguments = tf.placeholder(tf.int32, shape=[4], name="boundingBoxB")
+        self.bboxA_arguments = tf.placeholder(tf.int32, shape=[self.image_size], name="boundingBoxA")
+        self.bboxB_arguments = tf.placeholder(tf.int32, shape=[self.image_size], name="boundingBoxB")
 
         self.real_A = self.real_data[:, :, :, :self.input_c_dim]
         self.real_B = self.real_data[:, :, :, self.input_c_dim:self.input_c_dim + self.output_c_dim]
@@ -137,8 +137,7 @@ class cyclegan(object):
             .minimize(self.g_loss, var_list=self.g_vars)
 
         init_op = tf.global_variables_initializer()
-        self.sess.run(init_op, feed_dict={self.bboxA_arguments: self.bbox_temp,
-                                          self.bboxB_arguments: self.bbox_temp})
+        self.sess.run(init_op)
         self.writer = tf.summary.FileWriter("./logs", self.sess.graph)
 
         counter = 1
@@ -259,8 +258,7 @@ class cyclegan(object):
     def test(self, args):
         """Test cyclegan"""
         init_op = tf.global_variables_initializer()
-        self.sess.run(init_op, feed_dict={self.bboxA_arguments: self.bbox_temp,
-                                          self.bboxB_arguments: self.bbox_temp})
+        self.sess.run(init_op)
         if args.which_direction == 'AtoB':
             sample_files = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/testA'))
         elif args.which_direction == 'BtoA':
@@ -288,10 +286,7 @@ class cyclegan(object):
             sample_image = np.array(sample_image).astype(np.float32)
             image_path = os.path.join(args.test_dir,
                                       '{0}_{1}'.format(args.which_direction, os.path.basename(sample_file)))
-            fake_img = self.sess.run(out_var, feed_dict={in_var: sample_image,
-                                                         self.bboxA_arguments: self.bbox_temp,
-                                                         self.bboxB_arguments: self.bbox_temp
-                                                         })
+            fake_img = self.sess.run(out_var, feed_dict={in_var: sample_image})
             save_images(fake_img, [1, 1], image_path)
             index.write("<td>%s</td>" % os.path.basename(image_path))
             index.write("<td><img src='%s'></td>" % (sample_file if os.path.isabs(sample_file) else (

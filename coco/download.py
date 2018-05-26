@@ -17,8 +17,8 @@ import pycocotools.mask
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("-ds", "--dataset", default="val", help="Dataset [train, val]")
-parser.add_argument("-rs", "--resolution", default=300, help="Resolution of downloaded images", type=int)
+parser.add_argument("-ds", "--dataset", default="train", help="Dataset [train, val]")
+parser.add_argument("-rs", "--resolution", default=256, help="Resolution of downloaded images", type=int)
 parser.add_argument("-c", "--category", default="zebra", help="Which COCO category to download")
 parser.add_argument("-mb", "--minbboxsize", default=30, help="Images where all bounding  boxes are smaller than this value are not downloaded (of original image resolution) ", type=int)
 
