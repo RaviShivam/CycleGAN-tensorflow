@@ -8,5 +8,8 @@ datasets/*
 test/*
 sample/*
 out/*
-*.zip
 segmentation/models/*
+*.tar.gz
+*.zip
+segmentation/faster_rcnn_nas_coco_2018_01_28/*
+segmentation/datasets/*
