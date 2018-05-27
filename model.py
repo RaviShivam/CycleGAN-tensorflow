@@ -46,19 +46,19 @@ class cyclegan(object):
                                          self.input_c_dim + self.output_c_dim],
                                         name='real_A_and_B_images')
 
-        self.maskA_arguments = tf.placeholder(tf.int32, shape=[self.image_size, self.image_size], name="boundingBoxA")
-        self.maskB_arguments = tf.placeholder(tf.int32, shape=[self.image_size, self.image_size], name="boundingBoxB")
+        self.maskA_arguments = tf.placeholder(tf.float32, shape=[self.image_size, self.image_size], name="boundingBoxA")
+        self.maskB_arguments = tf.placeholder(tf.float32, shape=[self.image_size, self.image_size], name="boundingBoxB")
 
         self.real_A = self.real_data[:, :, :, :self.input_c_dim]
         self.real_B = self.real_data[:, :, :, self.input_c_dim:self.input_c_dim + self.output_c_dim]
 
-        self.fake_B = self.generator(image=self.real_A, bboxargs=self.maskA_arguments, options=self.options,
+        self.fake_B = self.generator(image=self.real_A, mask=self.maskA_arguments, options=self.options,
                                      reuse=False, name="generatorA2B")
-        self.fake_A_ = self.generator(image=self.fake_B, bboxargs=self.maskA_arguments, options=self.options,
+        self.fake_A_ = self.generator(image=self.fake_B, mask=self.maskA_arguments, options=self.options,
                                       reuse=False, name="generatorB2A")
-        self.fake_A = self.generator(image=self.real_B, bboxargs=self.maskB_arguments, options=self.options,
+        self.fake_A = self.generator(image=self.real_B, mask=self.maskB_arguments, options=self.options,
                                      reuse=True, name="generatorB2A")
-        self.fake_B_ = self.generator(image=self.fake_A, bboxargs=self.maskB_arguments, options=self.options,
+        self.fake_B_ = self.generator(image=self.fake_A, mask=self.maskB_arguments, options=self.options,
                                       reuse=True, name="generatorA2B")
 
         self.DB_fake = self.discriminator(self.fake_B, self.options, reuse=False, name="discriminatorB")
@@ -87,10 +87,10 @@ class cyclegan(object):
 
         self.db_loss_real = self.criterionGAN(self.DB_real, tf.ones_like(self.DB_real))
         self.db_loss_fake = self.criterionGAN(self.DB_fake_sample, tf.zeros_like(self.DB_fake_sample))
-        self.db_loss = (self.db_loss_real + self.db_loss_fake) / 2
+        self.db_loss = (self.db_loss_real + self.db_loss_fake) / 5
         self.da_loss_real = self.criterionGAN(self.DA_real, tf.ones_like(self.DA_real))
         self.da_loss_fake = self.criterionGAN(self.DA_fake_sample, tf.zeros_like(self.DA_fake_sample))
-        self.da_loss = (self.da_loss_real + self.da_loss_fake) / 2
+        self.da_loss = (self.da_loss_real + self.da_loss_fake) / 5
         self.d_loss = self.da_loss + self.db_loss
 
         self.g_loss_a2b_sum = tf.summary.scalar("g_loss_a2b", self.g_loss_a2b)
@@ -116,9 +116,9 @@ class cyclegan(object):
         self.test_B = tf.placeholder(tf.float32,
                                      [None, self.image_size, self.image_size,
                                       self.output_c_dim], name='test_B')
-        self.testB = self.generator(image=self.test_A, bboxargs=self.maskA_arguments, options=self.options, reuse=True,
+        self.testB = self.generator(image=self.test_A, mask=self.maskA_arguments, options=self.options, reuse=True,
                                     name="generatorA2B")
-        self.testA = self.generator(image=self.test_B, bboxargs=self.maskB_arguments, options=self.options, reuse=True,
+        self.testA = self.generator(image=self.test_B, mask=self.maskB_arguments, options=self.options, reuse=True,
                                     name="generatorB2A")
 
         t_vars = tf.trainable_variables()

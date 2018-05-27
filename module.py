@@ -106,12 +106,10 @@ def generator_resnet(image, mask, options, reuse=False, name="generator"):
             return y + x
 
         ###########################
-        seg_image = tf.pad(image, [[0, 0], [0, 0], [0, 0], [0, 1]])
-        mask = tf.expand_dims(mask, 0)
-        mask = tf.expand_dims(mask, -1)
-        mask = tf.pad(mask, [[0, 0], [0, 0], [0, 0], [3, 0]])
-        seg_image = seg_image + mask
-        new_channels = options.gf_dim + 1
+        fullmask = tf.stack([mask, mask, mask], axis=2)
+        fullmask = tf.expand_dims(fullmask, 0)
+        seg_image = tf.multiply(image, fullmask)
+        new_channels = 3
         ###########################
 
         # Justin Johnson's model from https://github.com/jcjohnson/fast-neural-style/
@@ -137,10 +135,13 @@ def generator_resnet(image, mask, options, reuse=False, name="generator"):
         d2 = deconv2d(d1, new_channels, 3, 2, name='g_d2_dc')
         d2 = tf.nn.relu(instance_norm(d2, 'g_d2_bn'))
         d2 = tf.pad(d2, [[0, 0], [3, 3], [3, 3], [0, 0]], "REFLECT")
-        pred_seg = tf.nn.tanh(conv2d(d2, options.output_c_dim, 7, 1, padding='VALID', name='g_pred_c'))
+        pred_seg = tf.nn.tanh(conv2d(d2, 3, 7, 1, padding='VALID', name='g_pred_c'))
 
         ###########################
-        pred = pred_seg
+        only_object = tf.multiply(pred_seg, fullmask)
+        background_mask = tf.multiply(tf.add(fullmask, -1), -1)
+        background_frame = tf.multiply(image, background_mask)
+        pred = tf.add(only_object, background_frame)
         ###########################
 
         return pred
