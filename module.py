@@ -111,35 +111,36 @@ def generator_resnet(image, mask, options, reuse=False, name="generator"):
         mask = tf.expand_dims(mask, -1)
         mask = tf.pad(mask, [[0, 0], [0, 0], [0, 0], [3, 0]])
         seg_image = seg_image + mask
+        new_channels = options.gf_dim + 1
         ###########################
 
         # Justin Johnson's model from https://github.com/jcjohnson/fast-neural-style/
         # The network with 9 blocks consists of: c7s1-32, d64, d128, R128, R128, R128,
         # R128, R128, R128, R128, R128, R128, u64, u32, c7s1-3
         c0 = tf.pad(seg_image, [[0, 0], [3, 3], [3, 3], [0, 0]], "REFLECT")
-        c1 = tf.nn.relu(instance_norm(conv2d(c0, options.gf_dim, 7, 1, padding='VALID', name='g_e1_c'), 'g_e1_bn'))
-        c2 = tf.nn.relu(instance_norm(conv2d(c1, options.gf_dim * 2, 3, 2, name='g_e2_c'), 'g_e2_bn'))
-        c3 = tf.nn.relu(instance_norm(conv2d(c2, options.gf_dim * 4, 3, 2, name='g_e3_c'), 'g_e3_bn'))
+        c1 = tf.nn.relu(instance_norm(conv2d(c0, new_channels, 7, 1, padding='VALID', name='g_e1_c'), 'g_e1_bn'))
+        c2 = tf.nn.relu(instance_norm(conv2d(c1, new_channels * 2, 3, 2, name='g_e2_c'), 'g_e2_bn'))
+        c3 = tf.nn.relu(instance_norm(conv2d(c2, new_channels * 4, 3, 2, name='g_e3_c'), 'g_e3_bn'))
         # define G network with 9 resnet blocks
-        r1 = residule_block(c3, options.gf_dim * 4, name='g_r1')
-        r2 = residule_block(r1, options.gf_dim * 4, name='g_r2')
-        r3 = residule_block(r2, options.gf_dim * 4, name='g_r3')
-        r4 = residule_block(r3, options.gf_dim * 4, name='g_r4')
-        r5 = residule_block(r4, options.gf_dim * 4, name='g_r5')
-        r6 = residule_block(r5, options.gf_dim * 4, name='g_r6')
-        r7 = residule_block(r6, options.gf_dim * 4, name='g_r7')
-        r8 = residule_block(r7, options.gf_dim * 4, name='g_r8')
-        r9 = residule_block(r8, options.gf_dim * 4, name='g_r9')
+        r1 = residule_block(c3, new_channels * 4, name='g_r1')
+        r2 = residule_block(r1, new_channels * 4, name='g_r2')
+        r3 = residule_block(r2, new_channels * 4, name='g_r3')
+        r4 = residule_block(r3, new_channels * 4, name='g_r4')
+        r5 = residule_block(r4, new_channels * 4, name='g_r5')
+        r6 = residule_block(r5, new_channels * 4, name='g_r6')
+        r7 = residule_block(r6, new_channels * 4, name='g_r7')
+        r8 = residule_block(r7, new_channels * 4, name='g_r8')
+        r9 = residule_block(r8, new_channels * 4, name='g_r9')
 
-        d1 = deconv2d(r9, options.gf_dim * 2, 3, 2, name='g_d1_dc')
+        d1 = deconv2d(r9, new_channels * 2, 3, 2, name='g_d1_dc')
         d1 = tf.nn.relu(instance_norm(d1, 'g_d1_bn'))
-        d2 = deconv2d(d1, options.gf_dim, 3, 2, name='g_d2_dc')
+        d2 = deconv2d(d1, new_channels, 3, 2, name='g_d2_dc')
         d2 = tf.nn.relu(instance_norm(d2, 'g_d2_bn'))
         d2 = tf.pad(d2, [[0, 0], [3, 3], [3, 3], [0, 0]], "REFLECT")
         pred_seg = tf.nn.tanh(conv2d(d2, options.output_c_dim, 7, 1, padding='VALID', name='g_pred_c'))
 
         ###########################
-
+        pred = pred_seg
         ###########################
 
         return pred

@@ -26,12 +26,12 @@ def download_zebras2horses_dataset():
     extension = ".zip"
 
     if not os.path.isdir(DATASET_TARGET_DIR + DATASET_FOLDER_NAME):
-        print("Downloading dataset...")
-        opener = urllib.request.URLopener()
-        opener.retrieve(url, DATASET_FOLDER_NAME + extension)
+        # print("Downloading dataset...")
+        # opener = urllib.request.URLopener()
+        # opener.retrieve(url, DATASET_FOLDER_NAME + extension)
 
         print("Unzipping....")
-        zip_ref = zipfile.ZipFile(DATASET_FOLDER_NAME, 'r')
+        zip_ref = zipfile.ZipFile(DATASET_FOLDER_NAME + ".zip", 'r')
         zip_ref.extractall(os.path.join(DATASET_TARGET_DIR))
         zip_ref.close()
         os.remove(DATASET_FOLDER_NAME + extension)
@@ -39,9 +39,9 @@ def download_zebras2horses_dataset():
 
 def get_files_from_dataset_folder():
     paths = []
-    paths.append(DATASET_TARGET_DIR + DATASET_FOLDER_NAME + "/testA")
+    # paths.append(DATASET_TARGET_DIR + DATASET_FOLDER_NAME + "/testA")
     paths.append(DATASET_TARGET_DIR + DATASET_FOLDER_NAME + "/testB")
-    paths.append(DATASET_TARGET_DIR + DATASET_FOLDER_NAME + "/trainA")
+    # paths.append(DATASET_TARGET_DIR + DATASET_FOLDER_NAME + "/trainA")
     paths.append(DATASET_TARGET_DIR + DATASET_FOLDER_NAME + "/trainB")
 
     files = []
@@ -59,12 +59,12 @@ def save_mask(model, files):
 
 
 def save_as_pickle(masks):
-    with open('masks.pickle', 'wb') as handle:
+    with open('maskB.pickle', 'wb') as handle:
         pickle.dump(masks, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 if __name__ == "__main__":
-    download_zebras2horses_dataset()
+    # download_zebras2horses_dataset()
     files = get_files_from_dataset_folder()
     coco_segmentation = CocoSegmentation()
     masks = save_mask(coco_segmentation, files)

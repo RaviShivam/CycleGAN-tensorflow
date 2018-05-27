@@ -21,7 +21,8 @@ if tf.__version__ < '1.4.0':
 class CocoSegmentation:
 
     def __init__(self):
-        self.download_detection_model()
+        # self.download_detection_model()
+        print("Loading model into memory")
         self.load_model_into_memory()
 
     def load_image_into_numpy_array(self, image):
@@ -126,10 +127,11 @@ class CocoSegmentation:
         # Size, in inches, of the output images.
         IMAGE_SIZE = (12, 8)
 
-        images = []
-
+        images = {}
+        c = 0
+        print("Total images: {}".format(len(TEST_IMAGE_PATHS)))
         for image_path in TEST_IMAGE_PATHS:
-            print("Detecting objects on", image_path)
+            print("Running: {}".format(c))
             image = Image.open(image_path)
             # resize the image
             # image.thumbnail((200, 200), Image.ANTIALIAS)
@@ -142,28 +144,28 @@ class CocoSegmentation:
             output_dict = self.run_inference_for_single_image(image_np, detection_graph)
 
             # Visualization of the results of a detection.
-            vis_util.visualize_boxes_and_labels_on_image_array(
-                image_np,
-                output_dict['detection_boxes'],
-                output_dict['detection_classes'],
-                output_dict['detection_scores'],
-                category_index,
-                instance_masks=output_dict.get('detection_masks'),
-                use_normalized_coordinates=True,
-                line_thickness=8)
-            plt.figure(figsize=IMAGE_SIZE)
-            plt.imshow(image_np)
+            # vis_util.visualize_boxes_and_labels_on_image_array(
+            #     image_np,
+            #     output_dict['detection_boxes'],
+            #     output_dict['detection_classes'],
+            #     output_dict['detection_scores'],
+            #     category_index,
+            #     instance_masks=output_dict.get('detection_masks'),
+            #     use_normalized_coordinates=True,
+            #     line_thickness=8)
+            # plt.figure(figsize=IMAGE_SIZE)
+            # plt.imshow(image_np)
 
             masks_in_image = []
             for i in range(output_dict['detection_masks'].shape[0]):
                 if output_dict['detection_scores'][i] > 0.5:
                     masks_in_image.append(output_dict['detection_masks'][i])
 
-            # plt.imshow(output_dict['detection_masks'])
-            plt.savefig("zebra3_detected_mask3.png")
+            # plt.savefig("current-detected.png")
+            current_mask = np.sum(np.array(masks_in_image), axis=0)
 
-            images.append({"file_path": image_path, "masks": masks_in_image})
-
+            images[image_path.split("/")[-1]] = current_mask
+            c += 1
         return images
 
 

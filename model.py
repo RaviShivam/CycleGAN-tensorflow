@@ -38,29 +38,27 @@ class cyclegan(object):
         self.pool = ImagePool(args.max_size)
 
     def _build_model(self):
-        # Cover full image when initializing
-        self.bbox_temp = [0, 0, self.image_size, self.image_size]
         # Load bounding box data
-        self.bboxA_full, self.bboxB_full = load_bounding_boxes_complete(self.dataset_dir)
+        self.maskA_full, self.maskB_full = load_all_class_masks(self.dataset_dir)
 
         self.real_data = tf.placeholder(tf.float32,
                                         [None, self.image_size, self.image_size,
                                          self.input_c_dim + self.output_c_dim],
                                         name='real_A_and_B_images')
 
-        self.bboxA_arguments = tf.placeholder(tf.int32, shape=[self.image_size], name="boundingBoxA")
-        self.bboxB_arguments = tf.placeholder(tf.int32, shape=[self.image_size], name="boundingBoxB")
+        self.maskA_arguments = tf.placeholder(tf.int32, shape=[self.image_size, self.image_size], name="boundingBoxA")
+        self.maskB_arguments = tf.placeholder(tf.int32, shape=[self.image_size, self.image_size], name="boundingBoxB")
 
         self.real_A = self.real_data[:, :, :, :self.input_c_dim]
         self.real_B = self.real_data[:, :, :, self.input_c_dim:self.input_c_dim + self.output_c_dim]
 
-        self.fake_B = self.generator(image=self.real_A, bboxargs=self.bboxA_arguments, options=self.options,
+        self.fake_B = self.generator(image=self.real_A, bboxargs=self.maskA_arguments, options=self.options,
                                      reuse=False, name="generatorA2B")
-        self.fake_A_ = self.generator(image=self.fake_B, bboxargs=self.bboxA_arguments, options=self.options,
+        self.fake_A_ = self.generator(image=self.fake_B, bboxargs=self.maskA_arguments, options=self.options,
                                       reuse=False, name="generatorB2A")
-        self.fake_A = self.generator(image=self.real_B, bboxargs=self.bboxB_arguments, options=self.options,
+        self.fake_A = self.generator(image=self.real_B, bboxargs=self.maskB_arguments, options=self.options,
                                      reuse=True, name="generatorB2A")
-        self.fake_B_ = self.generator(image=self.fake_A, bboxargs=self.bboxB_arguments, options=self.options,
+        self.fake_B_ = self.generator(image=self.fake_A, bboxargs=self.maskB_arguments, options=self.options,
                                       reuse=True, name="generatorA2B")
 
         self.DB_fake = self.discriminator(self.fake_B, self.options, reuse=False, name="discriminatorB")
@@ -118,9 +116,9 @@ class cyclegan(object):
         self.test_B = tf.placeholder(tf.float32,
                                      [None, self.image_size, self.image_size,
                                       self.output_c_dim], name='test_B')
-        self.testB = self.generator(image=self.test_A, bboxargs=self.bboxA_arguments, options=self.options, reuse=True,
+        self.testB = self.generator(image=self.test_A, bboxargs=self.maskA_arguments, options=self.options, reuse=True,
                                     name="generatorA2B")
-        self.testA = self.generator(image=self.test_B, bboxargs=self.bboxB_arguments, options=self.options, reuse=True,
+        self.testA = self.generator(image=self.test_B, bboxargs=self.maskB_arguments, options=self.options, reuse=True,
                                     name="generatorB2A")
 
         t_vars = tf.trainable_variables()
@@ -164,36 +162,31 @@ class cyclegan(object):
                                 batch_files]
                 batch_images = np.array(batch_images).astype(np.float32)
 
-                bboxA_real, bboxB_real = load_bounding_box_real(batch_files[0], self.bboxA_full, self.bboxB_full)
+                currentmaskA, currentmaskB = load_current_masks(batch_files[0], self.maskA_full, self.maskB_full)
 
-                if any([len(bboxA_real) == 0, len(bboxB_real) == 0]):
-                    continue
+                # Update G network and record fake outputs
+                fake_A, fake_B, _, summary_str = self.sess.run(
+                    [self.fake_A, self.fake_B, self.g_optim, self.g_sum],
+                    feed_dict={self.real_data: batch_images,
+                               self.maskA_arguments: currentmaskA,
+                               self.maskB_arguments: currentmaskB,
+                               self.lr: lr})
+                self.writer.add_summary(summary_str, counter)
+                [fake_A, fake_B] = self.pool([fake_A, fake_B])
 
-                for bbA in bboxA_real:
-                    for bbB in bboxB_real:
-                        # Update G network and record fake outputs
-                        fake_A, fake_B, _, summary_str = self.sess.run(
-                            [self.fake_A, self.fake_B, self.g_optim, self.g_sum],
-                            feed_dict={self.real_data: batch_images,
-                                       self.bboxA_arguments: bbA,
-                                       self.bboxB_arguments: bbB,
-                                       self.lr: lr})
-                        self.writer.add_summary(summary_str, counter)
-                        [fake_A, fake_B] = self.pool([fake_A, fake_B])
-
-                        # Update D network
-                        _, summary_str = self.sess.run(
-                            [self.d_optim, self.d_sum],
-                            feed_dict={self.real_data: batch_images,
-                                       self.fake_A_sample: fake_A,
-                                       self.fake_B_sample: fake_B,
-                                       self.lr: lr})
-                        self.writer.add_summary(summary_str, counter)
+                # Update D network
+                _, summary_str = self.sess.run(
+                    [self.d_optim, self.d_sum],
+                    feed_dict={self.real_data: batch_images,
+                               self.fake_A_sample: fake_A,
+                               self.fake_B_sample: fake_B,
+                               self.lr: lr})
+                self.writer.add_summary(summary_str, counter)
 
                 counter += 1
 
-                print(("Epoch: [%2d] [%4d/%4d] time: %4.4f, bboxes: [%2d]"
-                       % (epoch, idx, batch_idxs, time.time() - start_time, len(bboxA_real) + len(bboxB_real))))
+                print(("Epoch: [%2d] [%4d/%4d] time: %4.4f"
+                       % (epoch, idx, batch_idxs, time.time() - start_time)))
 
                 if np.mod(counter, args.print_freq) == 1:
                     self.sample_model(args.sample_dir, epoch, idx)
@@ -239,16 +232,13 @@ class cyclegan(object):
                          batch_files]
         sample_images = np.array(sample_images).astype(np.float32)
 
-        bboxA_real, bboxB_real = load_bounding_box_real(batch_files[0], self.bboxA_full, self.bboxB_full)
-
-        if any([len(bboxA_real) == 0, len(bboxB_real) == 0]):
-            return
+        currentmaskA, currentmaskB = load_current_masks(batch_files[0], self.maskA_full, self.maskB_full)
 
         fake_A, fake_B = self.sess.run(
             [self.fake_A, self.fake_B],
             feed_dict={self.real_data: sample_images,
-                       self.bboxA_arguments: bboxA_real[0],
-                       self.bboxB_arguments: bboxB_real[0]}
+                       self.maskA_arguments: currentmaskA,
+                       self.maskB_arguments: currentmaskB}
         )
         save_images(fake_A, [self.batch_size, 1],
                     './{}/A_{:02d}_{:04d}.jpg'.format(sample_dir, epoch, idx))

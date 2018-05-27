@@ -46,24 +46,24 @@ class ImagePool(object):
         else:
             return image
 
-def load_bounding_boxes_complete(dataset):
-    with open('./datasets/{}/bboxA.p'.format(dataset), 'rb') as f:
+def load_all_class_masks(dataset):
+    with open('./datasets/{}/maskA.p'.format(dataset), 'rb') as f:
         u = pickle._Unpickler(f)
         u.encoding = 'latin1'
-        bboxAfull = u.load()
+        masksA = u.load()
 
-    with open('./datasets/{}/bboxB.p'.format(dataset), 'rb') as f:
+    with open('./datasets/{}/maskB.p'.format(dataset), 'rb') as f:
         u = pickle._Unpickler(f)
         u.encoding = 'latin1'
-        bboxBfull = u.load()
+        masksB = u.load()
 
-    return [bboxAfull, bboxBfull]
+    return [masksA, masksB]
 
 
-def load_bounding_box_real(batch_files, bboxAfull, bboxBfull):
-    bboxA_real = np.array(bboxAfull[batch_files[0].split("/")[-1]])
-    bboxB_real = np.array(bboxBfull[batch_files[1].split("/")[-1]])
-    return bboxA_real.astype(int), bboxB_real.astype(int)
+def load_current_masks(batch_files, masksAfull, masksBfull):
+    currentmaskA = masksAfull[batch_files[0].split("/")[-1]]
+    currentmaskB = masksBfull[batch_files[1].split("/")[-1]]
+    return currentmaskA, currentmaskB
 
 
 
