@@ -228,9 +228,6 @@ class cyclegan(object):
             feed_dict={self.real_data: sample_images}
         )
 
-        print (fake_A.shape)
-        print (type(fake_A))
-
         # for img_a, img_b, name in list(zip(fake_A, fake_B, imgNames)):
         for i in range(len(imgNames)):
             save_images(np.expand_dims(fake_A[i],0), [self.batch_size, 1],
