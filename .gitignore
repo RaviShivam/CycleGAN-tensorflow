@@ -6,3 +6,5 @@ checkpoint/*
 datasets/*
 test/*
 sample/*
+.ropeproject
+*.pyc
