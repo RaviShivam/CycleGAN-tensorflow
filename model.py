@@ -206,11 +206,20 @@ class cyclegan(object):
             return False
 
     def sample_model(self, sample_dir, epoch, idx):
-        dataA = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/testA'))
-        dataB = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/testB'))
-        np.random.shuffle(dataA)
-        np.random.shuffle(dataB)
-        batch_files = list(zip(dataA[:self.batch_size], dataB[:self.batch_size]))
+        # dataA = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/testA'))
+        # dataB = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/testB'))
+        #
+        # np.random.shuffle(dataA)
+        # np.random.shuffle(dataB)
+        # batch_files = list(zip(dataA[:self.batch_size], dataB[:self.batch_size]))
+
+        d_dir = "./datasets/horse2zebra/"
+        imgsA = [d_dir + 'testA/n02381460_7700.jpg', d_dir + 'testA/n02381460_1300.jpg', d_dir + 'testA/n02381460_1260.jpg', d_dir + 'testA/n02381460_5090.jpg', d_dir + 'testA/n02381460_6950.jpg']
+        imgsB = [d_dir + 'testB/n02391049_5100.jpg', d_dir + 'testB/n02391049_3840.jpg', d_dir + 'testB/n02391049_4610.jpg', d_dir + 'testB/n02391049_260.jpg', d_dir + 'testB/n02391049_3310.jpg']
+        imgNames = ['im1','im2','im3','im4','im5']
+        batch_files = list(zip(imgsA, imgsB))
+
+
         sample_images = [load_train_data(batch_file, self.load_size, self.image_size, is_testing=True) for batch_file in batch_files]
         sample_images = np.array(sample_images).astype(np.float32)
 
@@ -218,10 +227,16 @@ class cyclegan(object):
             [self.fake_A, self.fake_B],
             feed_dict={self.real_data: sample_images}
         )
-        save_images(fake_A, [self.batch_size, 1],
-                    './{}/A_{:02d}_{:04d}.jpg'.format(sample_dir, epoch, idx))
-        save_images(fake_B, [self.batch_size, 1],
-                    './{}/B_{:02d}_{:04d}.jpg'.format(sample_dir, epoch, idx))
+
+        print (fake_A.shape)
+        print (type(fake_A))
+
+        # for img_a, img_b, name in list(zip(fake_A, fake_B, imgNames)):
+        for i in range(len(imgNames)):
+            save_images(np.expand_dims(fake_A[i],0), [self.batch_size, 1],
+                    './{}/A_{}_{:02d}_{:04d}.jpg'.format(sample_dir, imgNames[i], epoch, idx))
+            save_images(np.expand_dims(fake_B[i],0), [self.batch_size, 1],
+                    './{}/B_{}_{:02d}_{:04d}.jpg'.format(sample_dir, imgNames[i], epoch, idx))
 
     def test(self, args):
         """Test cyclegan"""
