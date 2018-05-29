@@ -118,6 +118,12 @@ class CocoSegmentation:
                                                                     use_display_name=True)
         category_index = label_map_util.create_category_index(categories)
 
+    def is_zebra(self, detection_class):
+        return category_index.get(detection_class)["name"] == "zebra"
+
+    def is_horse(self, detection_class):
+        return category_index.get(detection_class)["name"] == "horse"
+
     def segment_objects(self, TEST_IMAGE_PATHS):
 
         # Detection
@@ -154,11 +160,14 @@ class CocoSegmentation:
             #     use_normalized_coordinates=True,
             #     line_thickness=8)
             # plt.figure(figsize=IMAGE_SIZE)
+            #
             # plt.imshow(image_np)
 
             masks_in_image = []
             for i in range(output_dict['detection_masks'].shape[0]):
-                if output_dict['detection_scores'][i] > 0.5:
+                detection_class = output_dict['detection_classes'][i]
+                if output_dict['detection_scores'][i] > 0.5 \
+                        and (self.is_zebra(detection_class) or self.is_horse(detection_class)):
                     masks_in_image.append(output_dict['detection_masks'][i])
 
             # plt.savefig("current-detected.png")
