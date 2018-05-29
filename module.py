@@ -107,6 +107,7 @@ def generator_resnet(image, mask, options, reuse=False, name="generator"):
 
         ###########################
         seg_image = tf.pad(image, [[0, 0], [0, 0], [0, 0], [0, 1]])
+        mask = mask * 255
         mask = tf.expand_dims(mask, 0)
         mask = tf.expand_dims(mask, -1)
         mask = tf.pad(mask, [[0, 0], [0, 0], [0, 0], [3, 0]])

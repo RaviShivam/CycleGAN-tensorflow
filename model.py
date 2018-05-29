@@ -46,19 +46,19 @@ class cyclegan(object):
                                          self.input_c_dim + self.output_c_dim],
                                         name='real_A_and_B_images')
 
-        self.maskA_arguments = tf.placeholder(tf.int32, shape=[self.image_size, self.image_size], name="boundingBoxA")
-        self.maskB_arguments = tf.placeholder(tf.int32, shape=[self.image_size, self.image_size], name="boundingBoxB")
+        self.maskA_arguments = tf.placeholder(tf.float32, shape=[self.image_size, self.image_size], name="boundingBoxA")
+        self.maskB_arguments = tf.placeholder(tf.float32, shape=[self.image_size, self.image_size], name="boundingBoxB")
 
         self.real_A = self.real_data[:, :, :, :self.input_c_dim]
         self.real_B = self.real_data[:, :, :, self.input_c_dim:self.input_c_dim + self.output_c_dim]
 
-        self.fake_B = self.generator(image=self.real_A, bboxargs=self.maskA_arguments, options=self.options,
+        self.fake_B = self.generator(image=self.real_A, mask=self.maskA_arguments, options=self.options,
                                      reuse=False, name="generatorA2B")
-        self.fake_A_ = self.generator(image=self.fake_B, bboxargs=self.maskA_arguments, options=self.options,
+        self.fake_A_ = self.generator(image=self.fake_B, mask=self.maskA_arguments, options=self.options,
                                       reuse=False, name="generatorB2A")
-        self.fake_A = self.generator(image=self.real_B, bboxargs=self.maskB_arguments, options=self.options,
+        self.fake_A = self.generator(image=self.real_B, mask=self.maskB_arguments, options=self.options,
                                      reuse=True, name="generatorB2A")
-        self.fake_B_ = self.generator(image=self.fake_A, bboxargs=self.maskB_arguments, options=self.options,
+        self.fake_B_ = self.generator(image=self.fake_A, mask=self.maskB_arguments, options=self.options,
                                       reuse=True, name="generatorA2B")
 
         self.DB_fake = self.discriminator(self.fake_B, self.options, reuse=False, name="discriminatorB")
@@ -87,10 +87,10 @@ class cyclegan(object):
 
         self.db_loss_real = self.criterionGAN(self.DB_real, tf.ones_like(self.DB_real))
         self.db_loss_fake = self.criterionGAN(self.DB_fake_sample, tf.zeros_like(self.DB_fake_sample))
-        self.db_loss = (self.db_loss_real + self.db_loss_fake) / 2
+        self.db_loss = (self.db_loss_real + self.db_loss_fake) / 5  # Slow down discriminator
         self.da_loss_real = self.criterionGAN(self.DA_real, tf.ones_like(self.DA_real))
         self.da_loss_fake = self.criterionGAN(self.DA_fake_sample, tf.zeros_like(self.DA_fake_sample))
-        self.da_loss = (self.da_loss_real + self.da_loss_fake) / 2
+        self.da_loss = (self.da_loss_real + self.da_loss_fake) / 5  # Slow down discriminator
         self.d_loss = self.da_loss + self.db_loss
 
         self.g_loss_a2b_sum = tf.summary.scalar("g_loss_a2b", self.g_loss_a2b)
@@ -116,9 +116,9 @@ class cyclegan(object):
         self.test_B = tf.placeholder(tf.float32,
                                      [None, self.image_size, self.image_size,
                                       self.output_c_dim], name='test_B')
-        self.testB = self.generator(image=self.test_A, bboxargs=self.maskA_arguments, options=self.options, reuse=True,
+        self.testB = self.generator(image=self.test_A, mask=self.maskA_arguments, options=self.options, reuse=True,
                                     name="generatorA2B")
-        self.testA = self.generator(image=self.test_B, bboxargs=self.maskB_arguments, options=self.options, reuse=True,
+        self.testA = self.generator(image=self.test_B, mask=self.maskB_arguments, options=self.options, reuse=True,
                                     name="generatorB2A")
 
         t_vars = tf.trainable_variables()
@@ -267,8 +267,8 @@ class cyclegan(object):
         index.write("<html><body><table><tr>")
         index.write("<th>name</th><th>input</th><th>output</th></tr>")
 
-        out_var, in_var = (self.testB, self.test_A) if args.which_direction == 'AtoB' else (
-            self.testA, self.test_B)
+        out_var, in_var, maskdict = (self.testB, self.test_A, self.maskA_full) if args.which_direction == 'AtoB' else (
+            self.testA, self.test_B, self.maskB_full)
 
         for sample_file in sample_files:
             print('Processing image: ' + sample_file)
@@ -276,7 +276,14 @@ class cyclegan(object):
             sample_image = np.array(sample_image).astype(np.float32)
             image_path = os.path.join(args.test_dir,
                                       '{0}_{1}'.format(args.which_direction, os.path.basename(sample_file)))
-            fake_img = self.sess.run(out_var, feed_dict={in_var: sample_image})
+
+
+            currentmask = maskdict[sample_file.split("/")[-1]]
+
+            fake_img = self.sess.run(out_var,
+                                     feed_dict={in_var: sample_image,
+                                                self.maskA_arguments: currentmask,
+                                                self.maskB_arguments: currentmask})
             save_images(fake_img, [1, 1], image_path)
             index.write("<td>%s</td>" % os.path.basename(image_path))
             index.write("<td><img src='%s'></td>" % (sample_file if os.path.isabs(sample_file) else (
