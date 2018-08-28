@@ -138,10 +138,13 @@ def generator_resnet(image, mask, options, reuse=False, name="generator"):
         d2 = deconv2d(d1, new_channels, 3, 2, name='g_d2_dc')
         d2 = tf.nn.relu(instance_norm(d2, 'g_d2_bn'))
         d2 = tf.pad(d2, [[0, 0], [3, 3], [3, 3], [0, 0]], "REFLECT")
-        pred_seg = tf.nn.tanh(conv2d(d2, options.output_c_dim, 7, 1, padding='VALID', name='g_pred_c'))
+        pred_seg = tf.nn.tanh(conv2d(d2, 3, 7, 1, padding='VALID', name='g_pred_c'))
 
         ###########################
-        pred = pred_seg
+        only_object = tf.multiply(pred_seg, fullmask)
+        background_mask = tf.multiply(tf.add(fullmask, -1), -1)
+        background_frame = tf.multiply(image, background_mask)
+        pred = tf.add(only_object, background_frame)
         ###########################
 
         return pred
