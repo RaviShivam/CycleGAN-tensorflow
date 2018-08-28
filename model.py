@@ -14,59 +14,65 @@ class cyclegan(object):
     def __init__(self, sess, args):
         self.sess = sess
         self.batch_size = args.batch_size
-        self.load_size = args.load_size
-        self.image_size = args.fine_size
+        self.image_size = args.image_size
         self.input_c_dim = args.input_nc
         self.output_c_dim = args.output_nc
         self.L1_lambda = args.L1_lambda
         self.dataset_dir = args.dataset_dir
 
         self.discriminator = discriminator
-        if args.use_resnet:
-            self.generator = generator_resnet
-        else:
-            self.generator = generator_unet
+        self.generator = generator_resnet
         if args.use_lsgan:
             self.criterionGAN = mae_criterion
         else:
             self.criterionGAN = sce_criterion
 
         OPTIONS = namedtuple('OPTIONS', 'batch_size image_size \
-                              gf_dim df_dim output_c_dim is_training')
-        self.options = OPTIONS._make((args.batch_size, args.fine_size,
+                              gf_dim df_dim output_c_dim is_training crop_size')
+        self.options = OPTIONS._make((args.batch_size, args.image_size,
                                       args.ngf, args.ndf, args.output_nc,
-                                      args.phase == 'train'))
+                                      args.phase == 'train', args.crop_size))
 
         self._build_model()
         self.saver = tf.train.Saver()
         self.pool = ImagePool(args.max_size)
 
     def _build_model(self):
+        # Load bounding box data
+        self.maskA_full, self.maskB_full = load_all_class_masks(self.dataset_dir)
+
         self.real_data = tf.placeholder(tf.float32,
                                         [None, self.image_size, self.image_size,
                                          self.input_c_dim + self.output_c_dim],
                                         name='real_A_and_B_images')
 
+        self.maskA_arguments = tf.placeholder(tf.float32, shape=[self.image_size, self.image_size], name="boundingBoxA")
+        self.maskB_arguments = tf.placeholder(tf.float32, shape=[self.image_size, self.image_size], name="boundingBoxB")
+
         self.real_A = self.real_data[:, :, :, :self.input_c_dim]
         self.real_B = self.real_data[:, :, :, self.input_c_dim:self.input_c_dim + self.output_c_dim]
 
-        self.fake_B = self.generator(self.real_A, self.options, False, name="generatorA2B")
-        self.fake_A_ = self.generator(self.fake_B, self.options, False, name="generatorB2A")
-        self.fake_A = self.generator(self.real_B, self.options, True, name="generatorB2A")
-        self.fake_B_ = self.generator(self.fake_A, self.options, True, name="generatorA2B")
+        self.fake_B = self.generator(image=self.real_A, mask=self.maskA_arguments, options=self.options,
+                                     reuse=False, name="generatorA2B")
+        self.fake_A_ = self.generator(image=self.fake_B, mask=self.maskA_arguments, options=self.options,
+                                      reuse=False, name="generatorB2A")
+        self.fake_A = self.generator(image=self.real_B, mask=self.maskB_arguments, options=self.options,
+                                     reuse=True, name="generatorB2A")
+        self.fake_B_ = self.generator(image=self.fake_A, mask=self.maskB_arguments, options=self.options,
+                                      reuse=True, name="generatorA2B")
 
         self.DB_fake = self.discriminator(self.fake_B, self.options, reuse=False, name="discriminatorB")
         self.DA_fake = self.discriminator(self.fake_A, self.options, reuse=False, name="discriminatorA")
         self.g_loss_a2b = self.criterionGAN(self.DB_fake, tf.ones_like(self.DB_fake)) \
-            + self.L1_lambda * abs_criterion(self.real_A, self.fake_A_) \
-            + self.L1_lambda * abs_criterion(self.real_B, self.fake_B_)
+                          + self.L1_lambda * abs_criterion(self.real_A, self.fake_A_) \
+                          + self.L1_lambda * abs_criterion(self.real_B, self.fake_B_)
         self.g_loss_b2a = self.criterionGAN(self.DA_fake, tf.ones_like(self.DA_fake)) \
-            + self.L1_lambda * abs_criterion(self.real_A, self.fake_A_) \
-            + self.L1_lambda * abs_criterion(self.real_B, self.fake_B_)
+                          + self.L1_lambda * abs_criterion(self.real_A, self.fake_A_) \
+                          + self.L1_lambda * abs_criterion(self.real_B, self.fake_B_)
         self.g_loss = self.criterionGAN(self.DA_fake, tf.ones_like(self.DA_fake)) \
-            + self.criterionGAN(self.DB_fake, tf.ones_like(self.DB_fake)) \
-            + self.L1_lambda * abs_criterion(self.real_A, self.fake_A_) \
-            + self.L1_lambda * abs_criterion(self.real_B, self.fake_B_)
+                      + self.criterionGAN(self.DB_fake, tf.ones_like(self.DB_fake)) \
+                      + self.L1_lambda * abs_criterion(self.real_A, self.fake_A_) \
+                      + self.L1_lambda * abs_criterion(self.real_B, self.fake_B_)
 
         self.fake_A_sample = tf.placeholder(tf.float32,
                                             [None, self.image_size, self.image_size,
@@ -81,10 +87,10 @@ class cyclegan(object):
 
         self.db_loss_real = self.criterionGAN(self.DB_real, tf.ones_like(self.DB_real))
         self.db_loss_fake = self.criterionGAN(self.DB_fake_sample, tf.zeros_like(self.DB_fake_sample))
-        self.db_loss = (self.db_loss_real + self.db_loss_fake) / 2
+        self.db_loss = (self.db_loss_real + self.db_loss_fake) / 5  # Slow down discriminator
         self.da_loss_real = self.criterionGAN(self.DA_real, tf.ones_like(self.DA_real))
         self.da_loss_fake = self.criterionGAN(self.DA_fake_sample, tf.zeros_like(self.DA_fake_sample))
-        self.da_loss = (self.da_loss_real + self.da_loss_fake) / 2
+        self.da_loss = (self.da_loss_real + self.da_loss_fake) / 5  # Slow down discriminator
         self.d_loss = self.da_loss + self.db_loss
 
         self.g_loss_a2b_sum = tf.summary.scalar("g_loss_a2b", self.g_loss_a2b)
@@ -110,8 +116,10 @@ class cyclegan(object):
         self.test_B = tf.placeholder(tf.float32,
                                      [None, self.image_size, self.image_size,
                                       self.output_c_dim], name='test_B')
-        self.testB = self.generator(self.test_A, self.options, True, name="generatorA2B")
-        self.testA = self.generator(self.test_B, self.options, True, name="generatorB2A")
+        self.testB = self.generator(image=self.test_A, mask=self.maskA_arguments, options=self.options, reuse=True,
+                                    name="generatorA2B")
+        self.testA = self.generator(image=self.test_B, mask=self.maskB_arguments, options=self.options, reuse=True,
+                                    name="generatorB2A")
 
         t_vars = tf.trainable_variables()
         self.d_vars = [var for var in t_vars if 'discriminator' in var.name]
@@ -145,18 +153,24 @@ class cyclegan(object):
             np.random.shuffle(dataA)
             np.random.shuffle(dataB)
             batch_idxs = min(min(len(dataA), len(dataB)), args.train_size) // self.batch_size
-            lr = args.lr if epoch < args.epoch_step else args.lr*(args.epoch-epoch)/(args.epoch-args.epoch_step)
+            lr = args.lr if epoch < args.epoch_step else args.lr * (args.epoch - epoch) / (args.epoch - args.epoch_step)
 
             for idx in range(0, batch_idxs):
                 batch_files = list(zip(dataA[idx * self.batch_size:(idx + 1) * self.batch_size],
                                        dataB[idx * self.batch_size:(idx + 1) * self.batch_size]))
-                batch_images = [load_train_data(batch_file, args.load_size, args.fine_size) for batch_file in batch_files]
+                batch_images = [load_train_data(batch_file, args.image_size) for batch_file in
+                                batch_files]
                 batch_images = np.array(batch_images).astype(np.float32)
+
+                currentmaskA, currentmaskB = load_current_masks(batch_files[0], self.maskA_full, self.maskB_full)
 
                 # Update G network and record fake outputs
                 fake_A, fake_B, _, summary_str = self.sess.run(
                     [self.fake_A, self.fake_B, self.g_optim, self.g_sum],
-                    feed_dict={self.real_data: batch_images, self.lr: lr})
+                    feed_dict={self.real_data: batch_images,
+                               self.maskA_arguments: currentmaskA,
+                               self.maskB_arguments: currentmaskB,
+                               self.lr: lr})
                 self.writer.add_summary(summary_str, counter)
                 [fake_A, fake_B] = self.pool([fake_A, fake_B])
 
@@ -170,14 +184,17 @@ class cyclegan(object):
                 self.writer.add_summary(summary_str, counter)
 
                 counter += 1
-                print(("Epoch: [%2d] [%4d/%4d] time: %4.4f" % (
-                    epoch, idx, batch_idxs, time.time() - start_time)))
+
+                print(("Epoch: [%2d] [%4d/%4d] time: %4.4f"
+                       % (epoch, idx, batch_idxs, time.time() - start_time)))
 
                 if np.mod(counter, args.print_freq) == 1:
                     self.sample_model(args.sample_dir, epoch, idx)
 
                 if np.mod(counter, args.save_freq) == 2:
+                    print("Checkpointing model... Do not stop execution")
                     self.save(args.checkpoint_dir, counter)
+                    print("Model saving complete!")
 
     def save(self, checkpoint_dir, step):
         model_name = "cyclegan.model"
@@ -206,26 +223,22 @@ class cyclegan(object):
             return False
 
     def sample_model(self, sample_dir, epoch, idx):
-        # dataA = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/testA'))
-        # dataB = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/testB'))
-        #
-        # np.random.shuffle(dataA)
-        # np.random.shuffle(dataB)
-        # batch_files = list(zip(dataA[:self.batch_size], dataB[:self.batch_size]))
-
-        d_dir = "./datasets/horse2zebra/"
-        imgsA = [d_dir + 'testA/n02381460_7700.jpg', d_dir + 'testA/n02381460_1300.jpg', d_dir + 'testA/n02381460_1260.jpg', d_dir + 'testA/n02381460_5090.jpg', d_dir + 'testA/n02381460_6950.jpg']
-        imgsB = [d_dir + 'testB/n02391049_5100.jpg', d_dir + 'testB/n02391049_3840.jpg', d_dir + 'testB/n02391049_4610.jpg', d_dir + 'testB/n02391049_260.jpg', d_dir + 'testB/n02391049_3310.jpg']
-        imgNames = ['im1','im2','im3','im4','im5']
-        batch_files = list(zip(imgsA, imgsB))
-
-
-        sample_images = [load_train_data(batch_file, self.load_size, self.image_size, is_testing=True) for batch_file in batch_files]
+        dataA = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/testA'))
+        dataB = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/testB'))
+        np.random.shuffle(dataA)
+        np.random.shuffle(dataB)
+        batch_files = list(zip(dataA[:self.batch_size], dataB[:self.batch_size]))
+        sample_images = [load_train_data(batch_file, self.image_size) for batch_file in
+                         batch_files]
         sample_images = np.array(sample_images).astype(np.float32)
+
+        currentmaskA, currentmaskB = load_current_masks(batch_files[0], self.maskA_full, self.maskB_full)
 
         fake_A, fake_B = self.sess.run(
             [self.fake_A, self.fake_B],
-            feed_dict={self.real_data: sample_images}
+            feed_dict={self.real_data: sample_images,
+                       self.maskA_arguments: currentmaskA,
+                       self.maskB_arguments: currentmaskB}
         )
 
         # for img_a, img_b, name in list(zip(fake_A, fake_B, imgNames)):
@@ -257,21 +270,28 @@ class cyclegan(object):
         index.write("<html><body><table><tr>")
         index.write("<th>name</th><th>input</th><th>output</th></tr>")
 
-        out_var, in_var = (self.testB, self.test_A) if args.which_direction == 'AtoB' else (
-            self.testA, self.test_B)
+        out_var, in_var, maskdict = (self.testB, self.test_A, self.maskA_full) if args.which_direction == 'AtoB' else (
+            self.testA, self.test_B, self.maskB_full)
 
         for sample_file in sample_files:
             print('Processing image: ' + sample_file)
-            sample_image = [load_test_data(sample_file, args.fine_size)]
+            sample_image = [load_test_data(sample_file, args.image_size)]
             sample_image = np.array(sample_image).astype(np.float32)
             image_path = os.path.join(args.test_dir,
                                       '{0}_{1}'.format(args.which_direction, os.path.basename(sample_file)))
-            fake_img = self.sess.run(out_var, feed_dict={in_var: sample_image})
+
+
+            currentmask = maskdict[sample_file.split("/")[-1]]
+
+            fake_img = self.sess.run(out_var,
+                                     feed_dict={in_var: sample_image,
+                                                self.maskA_arguments: currentmask,
+                                                self.maskB_arguments: currentmask})
             save_images(fake_img, [1, 1], image_path)
             index.write("<td>%s</td>" % os.path.basename(image_path))
             index.write("<td><img src='%s'></td>" % (sample_file if os.path.isabs(sample_file) else (
-                '..' + os.path.sep + sample_file)))
+                    '..' + os.path.sep + sample_file)))
             index.write("<td><img src='%s'></td>" % (image_path if os.path.isabs(image_path) else (
-                '..' + os.path.sep + image_path)))
+                    '..' + os.path.sep + image_path)))
             index.write("</tr>")
         index.close()
